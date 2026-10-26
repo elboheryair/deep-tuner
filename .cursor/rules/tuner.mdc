@@ -1,0 +1,24 @@
+---
+description: Architecture, coding standards, and dual-mode system role for the deep-tuner module.
+alwaysApply: true
+---
+
+# DeepTuner System Directives & Fretbot Integration
+
+## 1. Dual-Mode Architecture (Crucial)
+`deep-tuner` must support two distinct operating modes:
+1. **Interactive Standalone Mode (UI):** Renders the full visual dashboard (pitch gauge, string selectors, tone generator, metronome tempo line, and red-to-green color feedback) for manual tuning.
+2. **Headless / Background Service Mode:** When called by other `fretbot` components (e.g., during active tab playback), it can run under the hood without rendering the heavy UI. It listens to microphone input, tracks note accuracy against an external target, and triggers callbacks (`onNoteMatch`).
+
+## 2. API & Component Contract
+- **Separation of Concerns:** 100% of Web Audio API mic streaming and pitch detection math must reside in `src/hooks/useTuner.js`.
+- **Props-Driven Control:** Components must accept flexible props (e.g., `headless={false}`, `targetNote`, `onNoteMatch`) so parent components in `fretbot` can control it seamlessly.
+
+## 3. Styling & UI Standards
+- **Framework:** Tailwind CSS only. No standalone `.css` files.
+- **Theme:** Dark mode default (`bg-slate-900`, `text-slate-100`).
+- **Feedback UI:** Smooth HSL color transitions for pitch accuracy (Red $\rightarrow$ Yellow $\rightarrow$ Green).
+
+## 4. Performance & Lifecycle
+- Always clean up `AudioContext` and mic streams in `useEffect` cleanups to avoid memory leaks.
+- Run frequency detection frames efficiently using `requestAnimationFrame`.
