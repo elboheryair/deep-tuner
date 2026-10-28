@@ -18,7 +18,6 @@ const MATCH_HOLD_MS = 400;
  * @param {(payload: { inTune: boolean, cents: number, frequency: number }) => void} [options.onNoteMatch]
  * @param {string} [options.initialPresetId='standard']
  * @param {number} [options.initialStringIndex=0]
- * @param {number} [options.metronomeBpm=120]
  */
 export function useTuner({
   headless = false,
@@ -26,7 +25,6 @@ export function useTuner({
   onNoteMatch,
   initialPresetId = 'standard',
   initialStringIndex = 0,
-  metronomeBpm = 120,
 } = {}) {
   const [listening, setListening] = useState(false);
   const [presetId, setPresetId] = useState(initialPresetId);
@@ -181,9 +179,8 @@ export function useTuner({
     setReferencePlaying(false);
   }, []);
 
-  const playReferenceTone = useCallback(async () => {
-    if (!targetFrequency) return;
-    stopReferenceTone();
+  const startReferenceTone = useCallback(async () => {
+    if (!targetFrequency || oscillatorRef.current) return;
 
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
@@ -201,9 +198,22 @@ export function useTuner({
     oscillatorRef.current = osc;
     gainRef.current = gain;
     setReferencePlaying(true);
+  }, [getAudioContext, targetFrequency]);
 
-    osc.onended = () => setReferencePlaying(false);
-  }, [getAudioContext, stopReferenceTone, targetFrequency]);
+  const toggleReferenceTone = useCallback(async () => {
+    if (oscillatorRef.current) {
+      stopReferenceTone();
+      return;
+    }
+    await startReferenceTone();
+  }, [startReferenceTone, stopReferenceTone]);
+
+  useEffect(() => {
+    const osc = oscillatorRef.current;
+    const ctx = audioContextRef.current;
+    if (!osc || !ctx || !targetFrequency) return;
+    osc.frequency.setValueAtTime(targetFrequency, ctx.currentTime);
+  }, [targetFrequency]);
 
   useEffect(() => {
     if (!onNoteMatch || !listening) return;
@@ -263,9 +273,8 @@ export function useTuner({
     detectedNote: detected,
     cents,
     inTune,
-    playReferenceTone,
+    toggleReferenceTone,
     stopReferenceTone,
     referencePlaying,
-    metronomeBpm,
   };
 }

@@ -15,7 +15,7 @@ export default function DeepTuner({
   onNoteMatch,
   initialPresetId,
   initialStringIndex,
-  metronomeBpm = 120,
+  defaultMetronomeBpm = 120,
   className = '',
 }) {
   const tuner = useTuner({
@@ -24,7 +24,6 @@ export default function DeepTuner({
     onNoteMatch,
     initialPresetId,
     initialStringIndex,
-    metronomeBpm,
   });
 
   const {
@@ -41,7 +40,7 @@ export default function DeepTuner({
     detectedNote,
     cents,
     inTune,
-    playReferenceTone,
+    toggleReferenceTone,
     referencePlaying,
   } = tuner;
 
@@ -91,12 +90,12 @@ export default function DeepTuner({
       <MicToggle listening={listening} onToggle={toggleListening} error={micError} />
 
       <ReferenceToneButton
-        onPlay={playReferenceTone}
+        onToggle={toggleReferenceTone}
         playing={referencePlaying}
         targetLabel={targetLabel}
       />
 
-      <MetronomeBar bpm={metronomeBpm} />
+      <MetronomeBar defaultBpm={defaultMetronomeBpm} />
     </div>
   );
 }
