@@ -5,6 +5,9 @@ import ReferenceToneButton from './ReferenceToneButton.jsx';
 import MetronomeBar from './MetronomeBar.jsx';
 import StringSelector from './StringSelector.jsx';
 import PresetSelector from './PresetSelector.jsx';
+import PitchStrategySelector from './PitchStrategySelector.jsx';
+import { DEFAULT_PITCH_STRATEGY_ID } from '../config/pitchDetection.js';
+import { MPM_HINT_METRONOME_STRATEGY_ID } from '../lib/pitch/strategies/mpmHintMetronome.js';
 
 /**
  * Standalone dashboard or headless pitch service for fretbot integration.
@@ -15,7 +18,8 @@ export default function DeepTuner({
   onNoteMatch,
   initialPresetId,
   initialStringIndex,
-  defaultMetronomeBpm = 120,
+  defaultMetronomeBpm = 60,
+  pitchStrategyId = DEFAULT_PITCH_STRATEGY_ID,
   className = '',
 }) {
   const tuner = useTuner({
@@ -24,6 +28,8 @@ export default function DeepTuner({
     onNoteMatch,
     initialPresetId,
     initialStringIndex,
+    pitchStrategyId,
+    defaultMetronomeBpm,
   });
 
   const {
@@ -42,6 +48,14 @@ export default function DeepTuner({
     inTune,
     toggleReferenceTone,
     referencePlaying,
+    pitchStrategyId: activePitchStrategyId,
+    setPitchStrategyId,
+    pitchStrategies,
+    metronomeEnabled,
+    setMetronomeEnabled,
+    metronomeBpm,
+    setMetronomeBpm,
+    metronomeBeatActive,
   } = tuner;
 
   if (headless) {
@@ -87,6 +101,12 @@ export default function DeepTuner({
         listening={listening}
       />
 
+      <PitchStrategySelector
+        strategies={pitchStrategies}
+        value={activePitchStrategyId}
+        onChange={setPitchStrategyId}
+      />
+
       <MicToggle listening={listening} onToggle={toggleListening} error={micError} />
 
       <ReferenceToneButton
@@ -95,7 +115,14 @@ export default function DeepTuner({
         targetLabel={targetLabel}
       />
 
-      <MetronomeBar defaultBpm={defaultMetronomeBpm} />
+      <MetronomeBar
+        enabled={metronomeEnabled}
+        onEnabledChange={setMetronomeEnabled}
+        bpm={metronomeBpm}
+        onBpmChange={setMetronomeBpm}
+        beatActive={metronomeBeatActive}
+        beatStrategyActive={activePitchStrategyId === MPM_HINT_METRONOME_STRATEGY_ID}
+      />
     </div>
   );
 }

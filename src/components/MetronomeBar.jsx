@@ -1,73 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-
 const MIN_BPM = 40;
 const MAX_BPM = 240;
-const BEAT_FLASH_MS = 140;
 
 function clampBpm(value) {
   return Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(value)));
 }
 
-export default function MetronomeBar({ defaultBpm = 120 }) {
-  const [enabled, setEnabled] = useState(false);
-  const [bpm, setBpm] = useState(clampBpm(defaultBpm));
-  const [beatActive, setBeatActive] = useState(false);
-
-  const nextBeatAtRef = useRef(null);
-  const timerRef = useRef(null);
-  const flashTimerRef = useRef(null);
-
-  const triggerBeat = useCallback(() => {
-    setBeatActive(true);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setBeatActive(false), BEAT_FLASH_MS);
-  }, []);
-
-  useEffect(() => {
-    if (!enabled) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      nextBeatAtRef.current = null;
-      setBeatActive(false);
-      return undefined;
-    }
-
-    const intervalMs = 60000 / bpm;
-
-    const schedule = () => {
-      const now = performance.now();
-      if (nextBeatAtRef.current == null) {
-        nextBeatAtRef.current = now + intervalMs;
-        triggerBeat();
-      }
-      const delay = nextBeatAtRef.current - now;
-      timerRef.current = setTimeout(() => {
-        triggerBeat();
-        nextBeatAtRef.current += intervalMs;
-        schedule();
-      }, Math.max(0, delay));
-    };
-
-    nextBeatAtRef.current = null;
-    schedule();
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-      nextBeatAtRef.current = null;
-    };
-  }, [enabled, bpm, triggerBeat]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    };
-  }, []);
-
+export default function MetronomeBar({
+  enabled,
+  onEnabledChange,
+  bpm,
+  onBpmChange,
+  beatActive,
+  beatStrategyActive = false,
+}) {
   const onBpmInput = (raw) => {
     const parsed = Number.parseInt(raw, 10);
     if (Number.isFinite(parsed)) {
-      setBpm(clampBpm(parsed));
+      onBpmChange(clampBpm(parsed));
     }
   };
 
@@ -77,7 +26,7 @@ export default function MetronomeBar({ defaultBpm = 120 }) {
         <span className="text-sm font-medium text-slate-200">Metronome</span>
         <button
           type="button"
-          onClick={() => setEnabled((on) => !on)}
+          onClick={() => onEnabledChange(!enabled)}
           className={`rounded-lg px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
             enabled
               ? 'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/50'
@@ -87,6 +36,12 @@ export default function MetronomeBar({ defaultBpm = 120 }) {
           {enabled ? 'On' : 'Off'}
         </button>
       </div>
+
+      {beatStrategyActive && (
+        <p className="mb-3 text-center text-xs text-yellow-200/90">
+          Pluck on each beat while tuning — pitch is sampled briefly after every click.
+        </p>
+      )}
 
       <div className="relative mb-4 h-14 overflow-hidden rounded-lg border border-slate-700 bg-slate-950/90">
         <div className="absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-slate-700/80" />
@@ -123,7 +78,7 @@ export default function MetronomeBar({ defaultBpm = 120 }) {
           max={MAX_BPM}
           step={1}
           value={bpm}
-          onChange={(e) => setBpm(clampBpm(Number(e.target.value)))}
+          onChange={(e) => onBpmChange(clampBpm(Number(e.target.value)))}
           className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-700 accent-yellow-400"
         />
         <input

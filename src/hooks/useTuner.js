@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { detectPitch } from '../lib/pitchDetection.js';
+import {
+  DEFAULT_PITCH_STRATEGY_ID,
+  detectPitch,
+  listPitchStrategies,
+} from '../lib/pitch/index.js';
+import {
+  createPeakGateState,
+  resetPeakGateState,
+} from '../lib/pitch/peakGate.js';
+import {
+  createBeatGateState,
+  resetBeatGateState,
+} from '../lib/pitch/beatGate.js';
+import { MPM_HINT_FUNDAMENTAL_STRATEGY_ID } from '../lib/pitch/strategies/mpmHintFundamental.js';
+import { MPM_HINT_METRONOME_STRATEGY_ID } from '../lib/pitch/strategies/mpmHintMetronome.js';
 import { createPitchSmoother } from '../lib/smoothPitch.js';
+import { useMetronome } from './useMetronome.js';
 import {
   TUNING_PRESETS,
   centsFromTarget,
@@ -18,6 +33,8 @@ const MATCH_HOLD_MS = 400;
  * @param {(payload: { inTune: boolean, cents: number, frequency: number }) => void} [options.onNoteMatch]
  * @param {string} [options.initialPresetId='standard']
  * @param {number} [options.initialStringIndex=0]
+ * @param {string} [options.pitchStrategyId] - Registered pitch strategy id (see `listPitchStrategies`).
+ * @param {number} [options.defaultMetronomeBpm=60]
  */
 export function useTuner({
   headless = false,
@@ -25,6 +42,8 @@ export function useTuner({
   onNoteMatch,
   initialPresetId = 'standard',
   initialStringIndex = 0,
+  pitchStrategyId = DEFAULT_PITCH_STRATEGY_ID,
+  defaultMetronomeBpm = 60,
 } = {}) {
   const [listening, setListening] = useState(false);
   const [presetId, setPresetId] = useState(initialPresetId);
@@ -32,6 +51,9 @@ export function useTuner({
   const [detectedFrequency, setDetectedFrequency] = useState(0);
   const [micError, setMicError] = useState(null);
   const [referencePlaying, setReferencePlaying] = useState(false);
+  const [pitchStrategyIdState, setPitchStrategyIdState] = useState(pitchStrategyId);
+
+  const metronome = useMetronome(defaultMetronomeBpm);
 
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -42,9 +64,19 @@ export function useTuner({
   const gainRef = useRef(null);
   const lastMatchRef = useRef({ inTune: false, at: 0 });
   const targetFrequencyRef = useRef(0);
+  const pitchStrategyRef = useRef(pitchStrategyIdState);
+  pitchStrategyRef.current = pitchStrategyIdState;
   const pitchSmootherRef = useRef(null);
   if (!pitchSmootherRef.current) {
     pitchSmootherRef.current = createPitchSmoother();
+  }
+  const peakGateStateRef = useRef(null);
+  if (!peakGateStateRef.current) {
+    peakGateStateRef.current = createPeakGateState();
+  }
+  const beatGateStateRef = useRef(null);
+  if (!beatGateStateRef.current) {
+    beatGateStateRef.current = createBeatGateState();
   }
 
   const preset = TUNING_PRESETS[presetId] ?? TUNING_PRESETS.standard;
@@ -91,6 +123,8 @@ export function useTuner({
       analyserRef.current = null;
     }
     pitchSmootherRef.current?.reset();
+    resetPeakGateState(peakGateStateRef.current);
+    resetBeatGateState(beatGateStateRef.current);
     setListening(false);
     setDetectedFrequency(0);
   }, [stopDetectionLoop]);
@@ -103,9 +137,18 @@ export function useTuner({
     const buffer = timeDomainBufferRef.current;
     analyser.getFloatTimeDomainData(buffer);
     const hint = targetFrequencyRef.current;
-    const rawFreq = detectPitch(buffer, ctx.sampleRate, {
+    const pitchOptions = {
       hintFrequency: hint > 0 ? hint : undefined,
-    });
+      strategyId: pitchStrategyRef.current,
+    };
+    if (pitchStrategyRef.current === MPM_HINT_FUNDAMENTAL_STRATEGY_ID) {
+      pitchOptions.peakGateState = peakGateStateRef.current;
+    }
+    if (pitchStrategyRef.current === MPM_HINT_METRONOME_STRATEGY_ID) {
+      pitchOptions.beatGateState = beatGateStateRef.current;
+      pitchOptions.metronomeClock = metronome.metronomeClock;
+    }
+    const rawFreq = detectPitch(buffer, ctx.sampleRate, pitchOptions);
     const displayFreq = pitchSmootherRef.current.step(
       rawFreq ?? null,
       hint > 0 ? hint : 0,
@@ -248,7 +291,9 @@ export function useTuner({
 
   useEffect(() => {
     pitchSmootherRef.current?.reset();
-  }, [targetFrequency, stringIndex, presetId]);
+    resetPeakGateState(peakGateStateRef.current);
+    resetBeatGateState(beatGateStateRef.current);
+  }, [targetFrequency, stringIndex, presetId, pitchStrategyIdState]);
 
   useEffect(() => {
     if (!headless) return undefined;
@@ -276,5 +321,13 @@ export function useTuner({
     toggleReferenceTone,
     stopReferenceTone,
     referencePlaying,
+    pitchStrategyId: pitchStrategyIdState,
+    setPitchStrategyId: setPitchStrategyIdState,
+    pitchStrategies: listPitchStrategies(),
+    metronomeEnabled: metronome.enabled,
+    setMetronomeEnabled: metronome.setEnabled,
+    metronomeBpm: metronome.bpm,
+    setMetronomeBpm: metronome.setBpm,
+    metronomeBeatActive: metronome.beatActive,
   };
 }
